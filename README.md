@@ -1,7 +1,7 @@
 Leiningen war plugin
 ====================
 
-This is a dead and unsupported project. Developers who are new to clojure web development are recommended to try the excellent [lein-ring](https://github.com/weavejester/lein-ring) plugin. If you are mixing Clojure with servlets then the [lein-servlet](https://github.com/kumarshantanu/lein-servlet) plugin should fit your needs.
+package war with Leiningen 
  
 
 Old Readme
@@ -46,10 +46,6 @@ Create a war file containing the following directory structure:
     WEB-INF/classes               resources                   :resources-path
     WEB-INF/classes               src                         :source-path
 
-Artifacts listed in `:dev-dependencies` will not copied into the war file. The name
-of the war file defaults to $PROJECT-$VERSION.war, however, it can be overridden
-by setting `:war :name` in project.clj.
-
 lein war
 --------
 
@@ -70,9 +66,9 @@ Simple Example
 ==============
 
     (defproject example "0.0.1"
-      :dependencies [[org.clojure/clojure "1.2.0"]
+      :dependencies [[org.clojure/clojure "1.6.0"]
                      [org.clojure/clojure-contrib "1.2.0"]]
-      :dev-dependencies [[uk.org.alienscience/leiningen-war "0.0.12"]])
+      :plugins [[uk.org.alienscience/leiningen-war "0.0.15"]])
 
 `lein war` will create a war file with the following structure:
 
@@ -84,31 +80,6 @@ Simple Example
 `lein uberwar` will create a similar directory structure with the addition:
 
     WEB-INF/lib       <----  taken from lib
-
-Overiding Defaults
-==================
-    
-    (defproject example "0.0.1"
-      :dependencies [[org.clojure/clojure "1.2.0"]
-                     [org.clojure/clojure-contrib "1.2.0"]]
-      :dev-dependencies [[uk.org.alienscience/leiningen-war "0.0.12"]]
-      :war {:webxml "war/example.xml"
-            :web-content "html"}
-      :compile-path  "build"
-      :library-path  "libs"
-      :resources-path "war/resources")
-
-`lein war` will create a war file with the following structure:
-
-    WEB-INF/
-    WEB-INF/web.xml           <--- taken from war/example.xml
-    WEB-INF/classes           <---- taken from build
-    index.html                <---- taken from html/index.html
-    WEB-INF/classes/templates <---- taken from war/resources/templates
-
-`lein uberwar` will create a similar directory structure with the addition:
-
-    WEB-INF/lib               <----  taken from libs
 
 War name
 --------

@@ -1,8 +1,8 @@
 
 (ns leiningen.web-xml
   "Leiningen war plugin - create web.xml file"
-  (:use [clojure.contrib.strint])
-  (:use [clojure.contrib.java-utils :only [file]]))
+  (:use [ clojure.core.strint])
+  (:use [clojure.java.io :only [file]]))
 
 (defn webxml-path
   "Returns the path of the web.xml to use in the war file"

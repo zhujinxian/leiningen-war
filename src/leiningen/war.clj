@@ -1,156 +1,102 @@
 (ns leiningen.war
-  "Leiningen war plugin"
-  (:use [clojure.contrib.duck-streams :only [to-byte-array copy]]
-        [clojure.contrib.str-utils :only [str-join re-sub re-gsub]]
-        [clojure.contrib.java-utils :only [file]])
+  (:require [leiningen.compile :as compile]
+            [clojure.java.io :as io]
+            [clojure.string :as string])
+        
   (:use leiningen.web-xml)
-  (:require [leiningen.compile :as compile])
-  (:import [java.util.jar Manifest JarEntry JarOutputStream]
-           [java.io BufferedOutputStream 
-                    FileOutputStream 
+  (:import [java.util.jar Manifest
+                          JarEntry
+                          JarOutputStream]
+           [java.io BufferedOutputStream
+                    FileOutputStream
                     ByteArrayInputStream]))
 
+(defn war-file-path [project war-name]
+  (let [target-dir (or (:target-dir project) (:target-path project))]
+    (.mkdirs (io/file target-dir))
+    (str target-dir "/" war-name)))
 
-(defn no-trailing-slash [path] (re-sub #"/$" "" path))
-(defn no-leading-slash [path] (re-sub #"^/" "" path))
-(defn no-double-slash [path] (re-sub #"//" "/" path))
-(defn unix-path [path] (re-gsub #"\\" "/" path))
-(defn has-trailing-slash [path] (re-find #"/$" path))
-(defn scratch-file? [path] (re-find #"[~#]$" path))
-(defn hidden? [path] (re-find #"/\.(?!hudson)" path))
-
-(defn find-files 
-  "Returns all files in and below the given directory. If 
-passed the path of a file returns a sequence containing a single 
-file object."
-  [path] 
-  (file-seq (file path)))
-
-(def dirs-in-jar)
-
-(defn add-dir-to-jar 
-  "Adds the given directory to the given jar output stream"
-  [jar-os dir]
-  (if-not (or (contains? dirs-in-jar dir)
-              (hidden? dir))
-    (do
-      (set! dirs-in-jar (assoc dirs-in-jar dir true))
-      (.putNextEntry jar-os (JarEntry. dir)))))
-
-(defn web-xml-in-classpath?
-  "Indicates if the given src file is web.xml and its destination is
-   the classpath"
-  [src-path dest-path]
-  (and (re-find #"/web.xml$" src-path)
-       (re-find #"/classes/" dest-path)))
-
-(defn valid-jar-entry?
-  "Indicates if the given file is suitable for including in a jar in the
-   given destination"
-  [f dest-path]
-  (let [src-path (str f)]
-    (and (.exists f)
-         (not (scratch-file? src-path))
-         (not (hidden? src-path))
-         (not (web-xml-in-classpath? src-path dest-path)))))
-
-(defn add-file-to-jar
-  "Adds a file/directory to the given jar output stream"
-  [jar-os f dest-path]
-  (when-not (empty? dest-path)
-    (cond (has-trailing-slash dest-path)
-	  (add-dir-to-jar jar-os dest-path)
-	  ;;--------
-	  (.isDirectory f)
-	  (let [dest-dir (no-double-slash (str dest-path "/"))]
-	    (add-dir-to-jar jar-os dest-dir))
-	  ;;--------
-	  (valid-jar-entry? f dest-path)
-	  (do
-	    (.putNextEntry jar-os (JarEntry. dest-path))
-	    (copy f jar-os)))))
-
-(defn jar-destination
-  "Returns the destination path in a jar file when given the
- top level jar path, the directory being added to the jar and
- the path of the file being added."
-  [jar-path directory file-path]
-  (let [dir-re (re-pattern (str "^" (no-trailing-slash (unix-path directory))))
-        dest-path (->> file-path
-                       (unix-path)
-                       (re-sub dir-re jar-path)
-                       (no-leading-slash)
-                       (no-double-slash))]
-      dest-path))
- 
-(defn add-tree-to-jar 
-  "Adds the contents of a directory (or a single file) to the given 
- jar output stream"
-  [jar-os jar-path directory]
-  (doseq [f (find-files directory)]
-    (add-file-to-jar jar-os f 
-                     (jar-destination jar-path directory (str f)))))
-
-(defn add-files-to-jar
-  "Adds the given files to the given jar output stream"
-  [jar-os jar-path directory files]
-  (doseq [path files]
-    (add-file-to-jar jar-os (file path)
-                     (jar-destination jar-path directory path))))
-
-(defn add-entry-to-jar
-  "Adds an entry into the given jar output stream"
-  ([jar-os directory]
-     (add-entry-to-jar jar-os "" directory))
-  ([jar-os entry-path directory]
-     (add-tree-to-jar jar-os entry-path directory))
-  ([jar-os entry-path directory files]
-     (add-files-to-jar jar-os entry-path directory files)))
-
-(defn make-manifest []
-  (Manifest.
-   (ByteArrayInputStream.
-    (to-byte-array 
-     (str 
-      "Manifest-Version: 1.0" \newline
-      "Created-By: Leiningen War Plugin" \newline
-      "Built-By: " (System/getProperty "user.name") \newline
-      "Build-Jdk: " (System/getProperty "java.version") \newline
-      \newline)))))
-
-(defn create-jar [path]
-  (JarOutputStream. (BufferedOutputStream. (FileOutputStream. path))
-                    (make-manifest)))
-
-(defn jar
-  "Create a jar file with entries described by vectors in one of 
-   the forms:
-   [dest-path? directory]
-   [dest-path? directory [file1 file2 ...]]
-   [dest-path? file]" 
-  [dest & entries] 
-  (with-open [jar-os (create-jar dest)]
-    (binding [dirs-in-jar {}]
-      (doseq [entry entries]
-        (apply add-entry-to-jar jar-os entry)))))
-
-(defn war-name
+(defn default-war-name
   "Returns the name of the war file to create"
   [project]
   (or (-> project :war :name)
       (str (:name project) "-" (:version project) ".war")))
 
-(defn web-content 
-  "Returns the path of the directories containing web 
- content that will be put into the war file"
-  [project]
-  (or (-> project :war :web-content) "src/html"))
+(defn- to-byte-stream [^String s]
+  (ByteArrayInputStream. (.getBytes s)))
 
-(defn check-exists
-  "Check that the given file exists - warn if not"
-  [f]
-  (if (not (.exists (file f))) 
-    (println "[WARNING]" (str f) "does not exist.")))
+(defn skip-file? [project war-path file]
+  (or (re-find #"^\.?#" (.getName file))
+      (re-find #"~$" (.getName file))
+      (some #(re-find % war-path)
+            (get-in project [:ring :war-exclusions] [#"(^|/)\."]))))
+
+(defn make-manifest [project]
+  (Manifest.
+   (ByteArrayInputStream.
+    (. 
+     (str 
+      "Manifest-Version: 1.0" \newline
+      "Created-By: Leiningen War Plugin" \newline
+      "Built-By: " (System/getProperty "user.name") \newline
+      "Build-Jdk: " (System/getProperty "java.version") \newline
+      \newline) getBytes))))
+
+(defn create-war [project file-path]
+  (-> (FileOutputStream. file-path)
+      (BufferedOutputStream.)
+      (JarOutputStream. (make-manifest project))))
+
+(defn write-entry [war war-path entry]
+  (.putNextEntry war (JarEntry. war-path))
+  (io/copy entry war))
+
+(defn str-entry [war war-path content]
+  (write-entry war war-path (to-byte-stream content)))
+
+(defn in-war-path [war-path root file]
+  (str war-path
+       (-> (.toURI (io/file root))
+           (.relativize (.toURI file))
+           (.getPath))))
+
+(defn file-entry [war project war-path file]
+  (when (and (.exists file)
+             (.isFile file)
+             (not (skip-file? project war-path file)))
+    (write-entry war war-path file)))
+
+(defn dir-entry [war project war-root dir-path]
+  (doseq [file (file-seq (io/file dir-path))]
+    (let [war-path (in-war-path war-root dir-path file)]
+      (file-entry war project war-path file))))
+
+(defn war-resources-paths [project]
+  (filter identity
+          (distinct (concat [(:war-resources-path project "war-resources")]
+                            (:war-resource-paths project)))))
+
+(defn source-and-resource-paths
+  "Return a distinct sequence of the project's source and resource paths,
+  unless :omit-source is true, in which case return only resource paths."
+  [project]
+  (let [resource-paths (concat [(:resources-path project)] (:resource-paths project))
+        source-paths (if (:omit-source project)
+                       '()
+                       (concat [(:source-path project)] (:source-paths project)))]
+    (distinct (concat source-paths resource-paths))))
+
+(defn write-war [project war-path]
+  (with-open [war-stream (create-war project war-path)]
+    (doto war-stream
+      (file-entry project "WEB-INF/web.xml" (io/file (webxml-path project)))
+      (dir-entry project "WEB-INF/classes/" (:compile-path project)))
+    (doseq [path (source-and-resource-paths project)
+            :when path]
+      (dir-entry war-stream project "WEB-INF/classes/" path))
+    (doseq [path (war-resources-paths project)]
+      (dir-entry war-stream project "" path))
+    war-stream))
 
 (defn war
   "This command does not include dependencies in the war file and is intended for cases
@@ -169,9 +115,6 @@ file object."
   [project & args]
   (autocreate-webxml project)
   (compile/compile project)
-  (jar (war-name project)
-       ["WEB-INF/web.xml" (webxml-path project)]
-       ["WEB-INF/classes/" (:compile-path project)]
-       ["WEB-INF/classes/" (:resources-path project)]
-       ["WEB-INF/classes/" (:source-path project)]
-       [(web-content project)]))
+  (let [war-path (war-file-path project (default-war-name project))] 
+    (write-war project war-path)))
+
