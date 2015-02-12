@@ -4,19 +4,14 @@ Leiningen war plugin
 package war with Leiningen 
  
 
-Old Readme
+Readme
 ==========
 
-This plugin creates standard war files for use with java web application servers 
-and is not useful when developing for the Google App Engine. 
+This plugin creates standard war files for use with java web application servers.
 
 This plugin is available at [http://clojars.org/](http://clojars.org/uk.org.alienscience/leiningen-war)
 
-    :dev-dependencies [[uk.org.alienscience/leiningen-war "0.0.13"]]
-
-An example application using the plugin is at: [http://github.com/alienscience/compojure-war-example](http://github.com/alienscience/compojure-war-example).
- 
-The best place for discussion and support is the Clojure web development google group: [http://groups.google.com/group/clojure-web-dev](http://groups.google.com/group/clojure-web-dev)
+    :plugins [[zhu.road/leiningen-war "0.0.1"]]
 
 This plugin adds three commands to leiningen:
 
