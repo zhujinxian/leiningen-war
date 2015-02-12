@@ -64,7 +64,6 @@
    WEB-INF/classes             resources              :resources-path
    WEB-INF/classes             src                    :source-path"
   [project & args]
-  (autocreate-webxml project)
   (compile/compile project)
   (let [war-path (war/war-file-path project (default-uberwar-name project))] 
     (write-uberwar project war-path)))

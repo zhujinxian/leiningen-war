@@ -113,7 +113,6 @@
    WEB-INF/classes             resources              :resources-path
    WEB-INF/classes             src                    :source-path"
   [project & args]
-  (autocreate-webxml project)
   (compile/compile project)
   (let [war-path (war-file-path project (default-war-name project))] 
     (write-war project war-path)))
