@@ -61,9 +61,8 @@ Simple Example
 ==============
 
     (defproject example "0.0.1"
-      :dependencies [[org.clojure/clojure "1.6.0"]
-                     [org.clojure/clojure-contrib "1.2.0"]]
-      :plugins [[uk.org.alienscience/leiningen-war "0.0.15"]])
+      :dependencies [[org.clojure/clojure "1.6.0"]]
+      :plugins [[zhu.road/leiningen-war "0.0.1"]])
 
 `lein war` will create a war file with the following structure:
 
